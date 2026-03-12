@@ -1,6 +1,6 @@
 {
   "name": "recruiter-ai-backend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI-powered recruiter backend",
   "main": "src/server.js",
   "scripts": {

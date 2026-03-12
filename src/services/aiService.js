@@ -75,6 +75,12 @@ function parseJSONorExtract(text) {
     const firstArr = text.indexOf('[');
     if (firstObj === -1 && firstArr === -1) {
       const snippet = text.slice(0, 200);
+      // special-case common error messages from the Gemini API so they
+      // bubble up in a more descriptive way rather than confusing the
+      // JSON parsing logic.
+      if (snippet.toLowerCase().includes('api key') || snippet.toLowerCase().includes('leaked')) {
+        throw new Error(`Gemini response indicates a key problem: "${snippet}"`);
+      }
       throw new Error(`No JSON object or array found in response. First 200 chars: "${snippet}"`);
     }
     
@@ -155,8 +161,22 @@ async function callGemini(prompt, model = MODELS.FAST) {
       res.on('end', () => {
         try {
           const json = JSON.parse(data || '{}');
+
+          // handle API errors early
+          if (json.error) {
+            const msg = typeof json.error === 'string'
+              ? json.error
+              : json.error.message || JSON.stringify(json.error);
+            logger.error('Gemini API returned an error', { error: msg });
+            return reject(new Error(`Gemini API error: ${msg}`));
+          }
+
           const text = extractGeneratedText(json);
-          if (!text) return reject(new Error('No generated text found in Gemini response'));
+          if (!text) {
+            // log the raw JSON for debugging if nothing was extracted
+            logger.error('No generated text found in Gemini response', { raw: json });
+            return reject(new Error('No generated text found in Gemini response'));
+          }
           // DEBUG: Log first 500 chars of raw response
           logger.debug('Gemini raw response', { snippet: text.slice(0, 500) });
           resolve(text.trim());
